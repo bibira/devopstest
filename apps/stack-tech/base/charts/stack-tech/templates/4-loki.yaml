@@ -1,0 +1,197 @@
+{{- if .Values.loki.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-loki-cm
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "40"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  sources:
+    - repoURL: https://dev.azure.com/gca-trans/_git/Devops
+      targetRevision: develop
+      path: loki
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: loki
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-loki
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "41"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: {{ .Values.loki.source.targetRevision }}
+    chart: loki
+    helm:
+      releaseName: loki
+      valuesObject:
+        gateway:
+          service:
+            port: 3100
+        {{- if eq .Values.k8s.flavor "rke2" }}
+        global:
+          clusterDomain: cluster.local
+          dnsNamespace: kube-system
+          dnsService: rke2-coredns-rke2-coredns
+        {{- end }}
+        loki:
+          auth_enabled: false
+
+          commonConfig:
+            replication_factor: 1
+          compactor:
+            retention_enabled: true
+            shared_store: filesystem
+          query_scheduler:
+            max_outstanding_requests_per_tenant: 4096
+          frontend:
+            max_outstanding_per_tenant: 4096
+          query_range:
+            split_queries_by_interval: 24h          
+            parallelise_shardable_queries: true
+            results_cache:
+              cache:
+                embedded_cache:
+                  enabled: true
+                  max_size_mb: 500            
+          limits_config:
+            enforce_metric_name: false
+            max_cache_freshness_per_query: 10m
+            reject_old_samples: true
+            reject_old_samples_max_age: 168h
+            split_queries_by_interval: 15m
+            per_stream_rate_limit: 512M
+            cardinality_limit: 200000
+            ingestion_burst_size_mb: 1000
+            ingestion_rate_mb: 10000
+            max_entries_limit_per_query: 1000000
+            max_global_streams_per_user: 10000
+            max_streams_per_user: 0
+            max_label_value_length: 20480
+            max_label_name_length: 10240
+            max_label_names_per_series: 300
+            max_query_parallelism: 32
+            retention_period: {{ .Values.loki.limits_config.retention_period }}
+          storage:
+            type: filesystem
+          rulerConfig:
+            alertmanager_url: http://alertmanager-operated.prometheus:9093
+            storage:
+              local:
+                directory: /var/loki/rules
+              type: local
+        monitoring:
+          dashboards:
+            enabled: false
+          lokiCanary:
+            enabled: false
+          selfMonitoring:
+            enabled: false
+            grafanaAgent:
+              installOperator: false
+        singleBinary:
+          extraVolumeMounts:
+            - mountPath: /var/loki/rules/fake
+              name: rules
+          extraVolumes:
+            - configMap:
+                name: loki-alerting-rules
+              name: rules
+          persistence:
+            enableStatefulSetAutoDeletePVC: false
+            size: {{ .Values.loki.singleBinary.persistence.size }}
+          replicas: 1
+        test:
+          enabled: false
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: loki
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-promtail
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "42"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: {{ .Values.promtail.source.targetRevision }}
+    chart: promtail
+    helm:
+      releaseName: promtail
+      valuesObject:
+        configmap:
+          enabled: true
+        config:
+          clients:
+            - url: http://loki-gateway:3100/loki/api/v1/push
+          snippets:
+            extraRelabelConfigs:
+              - action: replace
+                source_labels:
+                  - __meta_kubernetes_pod_annotation_exporter
+                target_label: exporter
+            extraScrapeConfigs: |
+              - job_name: logf5
+                pipeline_stages:
+                 - regex:
+                     expression: '(?P<Host>Host: .*(.com))'
+                 - labels:
+                     Host:              
+                static_configs:
+                  - targets:
+                      - localhost
+                    labels:
+                      job: f5logs
+                      __path__: /var/logf5/*log            
+
+        extraVolumeMounts:
+          - mountPath: /var/logf5
+            name: logf5
+        extraVolumes:
+          - name: logf5
+              # Set the NFS server and path to the share
+            nfs:
+              server: 10.10.1.156
+              path: /mnt/docker-data/logf5  
+
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: loki
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+{{- end }}
