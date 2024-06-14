@@ -1,0 +1,168 @@
+{{- if .Values.kubePrometheusStack.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "20"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  sources:
+    - repoURL: https://dev.azure.com/gca-trans/_git/Devops
+      targetRevision: develop
+      path: grafana_dashboard
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: {{ .Values.kubePrometheusStack.source.targetRevision }}
+      chart: kube-prometheus-stack
+      helm:
+        releaseName: kube-prometheus-stack
+        valuesObject:
+          alertmanager:
+            config:
+              global:
+                smtp_smarthost: localsmtp.gcatrans.com:25
+                smtp_require_tls: false
+                smtp_from: {{ .Values.kubePrometheusStack.alertmanager.config.global.smtp_from }}
+              receivers:
+              - name: teams
+                webhook_configs:
+                - send_resolved: true
+                  url: http://prometheus-msteams.prometheus:2000/teams
+              route:
+                group_by:
+                - namespace
+                - teams
+                group_interval: 5m
+                group_wait: 30s
+                receiver: teams
+                repeat_interval: 1h
+                routes:
+                - matchers:
+                  - alertname = "InfoInhibitor|Watchdog"
+                  receiver: teams
+          grafana:
+            adminPassword: prom-operator
+            adminUser: admin
+            additionalDataSources:
+              - name: Loki
+                type: loki
+                uid: loki
+                access: proxy
+                url: http://loki-gateway.loki:3100
+                editable: true
+                jsonData:
+                  derivedFields:
+                    - datasourceUid: tempo
+                      matcherRegex: 'traceid=(\w+)'
+                      name: traceid
+                      url: $${__value.raw}
+              - name: Tempo
+                type: tempo
+                uid: tempo
+                access: proxy
+                url: http://tempo.tempo:3100
+                editable: true
+                jsonData:
+                  tracesToLogsV2:
+                    datasourceUid: 'loki'
+                    spanStartTimeShift: '-5m'
+                    spanEndTimeShift: '5m'
+                    tags: [{key: 'k8s.deployment.name', value: 'job'}]
+                    filterByTraceID: false
+                    filterBySpanID: false
+                    customQuery: true
+                    query: '{exporter="OTLP"} |= "traceid=$${__trace.traceId}"'
+                  tracesToMetrics:
+                    datasourceUid: 'prometheus'
+                    spanStartTimeShift: '-5m'
+                    spanEndTimeShift: '5m'
+                    tags: [{ key: 'service.name', value: 'service' }, { key: 'job' }]
+                    queries:
+                      - name: 'Sample query'
+                        query: 'sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m]))'
+                  serviceMap:
+                    datasourceUid: 'prometheus'
+                  nodeGraph:
+                    enabled: true
+                  search:
+                    hide: false
+                    lokiSearch:
+                    datasourceUid: 'loki'
+                  traceQuery:
+                    timeShiftEnabled: true
+                    spanStartTimeShift: '5m'
+                    spanEndTimeShift: '-5m'
+                  spanBar:
+                    type: 'Tag'
+                    tag: 'http.path'
+            grafana.ini:
+              feature_toggles:
+                enable: "correlations traceToMetrics"
+            service:
+              port: 3000
+              type: LoadBalancer
+            sidecar:
+              datasources:
+                exemplarTraceIdDestinations:
+                  datasourceUid: tempo
+                  traceIdLabelName: trace_id
+            dashboardProviders:
+              dashboardproviders.yaml:
+                apiVersion: 1
+                providers:
+                  - allowUiUpdates: true
+                    disableDeletion: false
+                    editable: true
+                    folder: provisionned
+                    name: provisionned
+                    options:
+                      path: /tmp/dashboards/provisionned
+                    orgId: "1"
+                    type: file
+                    updateIntervalSeconds: 10
+            ingress:
+              annotations: {}
+              enabled: {{ .Values.kubePrometheusStack.grafana.ingress.enabled }}
+              extraPaths: []
+              hosts:
+                {{- with .Values.kubePrometheusStack.grafana.ingress.hosts }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              labels: {}
+              path: /
+              pathType: Prefix
+              tls: []
+          prometheus:
+            prometheusSpec:
+              retention: {{ .Values.kubePrometheusStack.prometheus.prometheusSpec.retention }}
+              retentionSize: {{ .Values.kubePrometheusStack.prometheus.prometheusSpec.retentionSize }}              
+              enableFeatures:
+                - exemplar-storage
+                - otlp-write-receiver
+              enableRemoteWriteReceiver: true
+              podMonitorSelectorNilUsesHelmValues: false
+              serviceMonitorSelectorNilUsesHelmValues: false
+              storageSpec:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: {{ .Values.kubePrometheusStack.prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName }} 
+                    accessModes:
+                      - ReadWriteOnce
+                    resources:
+                      requests:
+                        storage: {{ .Values.kubePrometheusStack.prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage }}
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: prometheus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true
+{{- end }}
