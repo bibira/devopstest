@@ -10,7 +10,7 @@ helmCharts:
     releaseName: stack-tech
     valuesInline:
       spec:
-        project: horsprd-argocd
+        project: stack-tech
       #  *************        
       prom2teams:
         connectors: 
