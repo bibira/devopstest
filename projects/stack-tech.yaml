@@ -36,7 +36,7 @@ spec:
   generators:
   - git:
       files:
-      - path: apps\**\stack-tech\config.json
+      - path: apps/**/stack-tech/config.json
       repoURL: https://github.com/bibira/devopstest.git
       requeueAfterSeconds: 20
       revision: ""
@@ -49,7 +49,7 @@ spec:
             repoURL: ""
   - git:
       files:
-      - path: apps\**\stack-tech\config_dir.json
+      - path: apps/**/stack-tech/config_dir.json
       repoURL: https://github.com/bibira/devopstest.git
       requeueAfterSeconds: 20
       revision: ""
