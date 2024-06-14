@@ -1,0 +1,81 @@
+{{- if .Values.postgresexp.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-posgresql-exp-secret
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "230"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: cloudnativepg
+    directory:
+      include: {{ .Values.postgreexpsecret.source.directory.include }}
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: {{ .Values.spec.destination.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-posgresql-exp
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "231"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      targetRevision: '*' #{{ .Values.neuvector.crd.source.targetRevision }}
+      chart: prometheus-postgres-exporter
+      helm:
+        releaseName: prometheus-postgres-exporter
+        valuesObject:
+          serviceMonitor:
+            enabled: true
+          config:
+            datasource:
+              host: {{ .Values.postgresexp.config.datasource.host }}
+            #   user: {{ .Values.postgresexp.config.datasource.user }}
+            #   password: {{ .Values.postgresexp.config.datasource.password }}
+            #   port: {{ .Values.postgresexp.config.datasource.port }}
+            #   database: {{ .Values.postgresexp.config.datasource.database }}
+            datasourceSecret:
+              name: {{ .Values.postgresexp.config.datasourceSecret.name }}
+              key: {{ .Values.postgresexp.config.datasourceSecret.key }}  
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+   
+          
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: prometheus-postgres-exporter
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true      
+---
+{{- end }}
