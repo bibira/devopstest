@@ -1,0 +1,160 @@
+{{- if .Values.neuvector.enabled -}}
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-neuvector-crd
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "100"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://charts.rancher.io
+    targetRevision: '*' #{{ .Values.neuvector.crd.source.targetRevision }}
+    chart: neuvector-crd
+    helm:
+      releaseName: neuvector-crd
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: cattle-neuvector-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+---
+ 
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-neuvector
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "101"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://charts.rancher.io
+    targetRevision: '*' #{{ .Values.neuvector.source.targetRevision }}
+    chart: neuvector
+    helm:
+      releaseName: neuvector
+      valuesObject:
+        rbac: true
+        ranchersso: # required for rancher authentication
+          enabled: true        
+        global:
+          cattle:
+            clusterName: {{ .Values.neuvector.global.cattle.clusterName }}
+            clusterId: {{ .Values.neuvector.global.cattle.clusterId }}
+            url: https://web-rancher.gcatrans.com/
+        controller:
+          pvc:
+            enabled: true
+            storageClass: {{ .Values.neuvector.controller.pvc.storageClass }}
+        manager:
+          ingress:
+            enabled: {{ .Values.neuvector.manager.ingress.enabled }}
+            host: {{ .Values.neuvector.manager.ingress.host }} 
+          svc:
+            type: ClusterIP
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: cattle-neuvector-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+{{- end }}
+
+
+
+# {{- if .Values.neuvector.enabled -}}
+# {{- /*
+#  apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: {{ include "stack-tech.fullname" . }}-neuvector-crd
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "100"
+#   finalizers:
+#     - resources-finalizer.argocd.argoproj.io
+# spec:
+#   project: {{ .Values.spec.project }}
+#   source:
+#     repoURL: https://neuvector.github.io/neuvector-helm/
+#     targetRevision: {{ .Values.neuvector.crd.source.targetRevision }}
+#     chart: crd
+#     helm:
+#       releaseName: neuvector-crd
+#   destination:
+#     server: {{ .Values.spec.destination.server }}
+#     namespace: cattle-neuvector-system
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     syncOptions:
+#       - CreateNamespace=true
+#       - PruneLast=true
+# ---
+ 
+# */ -}}
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: {{ include "stack-tech.fullname" . }}-neuvector
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "101"
+#   finalizers:
+#     - resources-finalizer.argocd.argoproj.io
+# spec:
+#   project: {{ .Values.spec.project }}
+#   source:
+#     repoURL: https://neuvector.github.io/neuvector-helm/
+#     targetRevision: {{ .Values.neuvector.source.targetRevision }}
+#     chart: core
+#     helm:
+#       releaseName: neuvector
+#       valuesObject:
+#         rbac: true
+#         ranchersso: # required for rancher authentication
+#           enabled: true        
+#         global:
+#           cattle:
+#             clusterName: {{ .Values.neuvector.global.cattle.clusterName }}
+#             clusterId: {{ .Values.neuvector.global.cattle.clusterId }}
+#             url: https://web-rancher.gcatrans.com
+#         controller:
+#           pvc:
+#             enabled: true
+#             storageClass: {{ .Values.neuvector.controller.pvc.storageClass }}
+#         manager:
+#           ingress:
+#             enabled: {{ .Values.neuvector.manager.ingress.enabled }}
+#             host: {{ .Values.neuvector.manager.ingress.host }} 
+#           svc:
+#             type: ClusterIP
+#   destination:
+#     server: {{ .Values.spec.destination.server }}
+#     namespace: cattle-neuvector-system
+#   syncPolicy:
+#     automated:
+#       prune: true
+#       selfHeal: true
+#     syncOptions:
+#       - CreateNamespace=true
+#       - PruneLast=true
+# {{- end }}
