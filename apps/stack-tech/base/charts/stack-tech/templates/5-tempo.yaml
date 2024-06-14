@@ -1,0 +1,42 @@
+{{- if .Values.tempo.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-tempo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "50"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: {{ .Values.tempo.source.targetRevision }}
+    chart: tempo
+    helm:
+      releaseName: tempo
+      values: |
+        persistence:
+          enabled: true
+          accessModes:
+            - ReadWriteMany          
+          size: {{ .Values.tempo.persistence.size }}
+        tempo:
+          metricsGenerator:
+            enabled: true
+            remoteWriteUrl: http://kube-prometheus-stack-prometheus.prometheus:9090/api/v1/write
+          receivers:
+            jaeger: null
+        retention: {{ .Values.tempo.retention }}
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: tempo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+{{- end }}
