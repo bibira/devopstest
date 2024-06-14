@@ -1,4 +1,63 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-resources:
-- ../../base
+namePrefix: stack-tech-
+commonLabels:
+  variant: stack-tech
+helmGlobals:
+  chartHome: ../../base/charts
+helmCharts:
+  - name: stack-tech
+    releaseName: stack-tech
+    valuesInline:
+      spec:
+        project: horsprd-argocd
+      #  *************        
+      prom2teams:
+        connectors: 
+        - teams : "https://charlesandre.webhook.office.com/webhookb2/5c49e775-13d2-4f6d-80b5-ba3f1651ebaf@38e68108-2383-4d82-a4b3-ac423a5e6218/IncomingWebhook/a48ce5408e314f0395ccf706d3801a05/dfd76bdb-37d4-4c4c-b907-6ea781954db5"
+
+      #  *************
+      longhorn:
+        enabled: true
+      #  *************
+      neuvector:
+        enabled: false
+        global:
+          cattle:
+            clusterName: stack-tech
+            clusterId: c-m-qr8mjk2z         
+        controller:
+          pvc:
+            storageClass: longhorn
+      kubePrometheusStack:
+        enabled: false
+        prometheus:
+          prometheusSpec:
+            retention: 72h
+            retentionSize: 5GB    
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: longhorn
+                  resources:
+                    requests:
+                      storage: 5Gi
+      tempo:
+        enabled: false
+      #  *************
+      opentelemetry:
+        enabled: false
+      #  *************
+
+        grafana:
+          ingress:
+            enabled: true 
+            hosts: 
+              - grafana-stack-tech-argocd.gcatrans.com             
+      #  *************
+      loki:
+        enabled: false
+      traefikmetrics:
+        enabled: true
+      traefik:
+        enabled: true
