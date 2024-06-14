@@ -1,0 +1,33 @@
+{{- if .Values.cloudnativepg.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-cloudnativepg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "210"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://cloudnative-pg.io/charts/
+    targetRevision: '*' #{{ .Values.neuvector.crd.source.targetRevision }}
+    chart: cloudnative-pg
+    helm:
+      releaseName: cloudnative-pg
+      valuesObject:
+        crds:
+          create: true 
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: cloudnative-pg
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true      
+{{- end }}
