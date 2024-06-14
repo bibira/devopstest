@@ -1,0 +1,208 @@
+{{- if .Values.traefik.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-gca-tls
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: k3s/certificats
+    directory:
+      include: gca-tls.yaml
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-traefik
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://traefik.github.io/charts
+    targetRevision: {{ .Values.traefik.source.targetRevision }}
+    chart: traefik
+    helm:
+      releaseName: traefik
+      valuesObject:
+        deployment:
+          podAnnotations:
+            exporter: OTLP
+        ingressRoute:
+          dashboard:
+            enabled: true
+            entryPoints:
+              - traefik
+              - websecure
+        logs:
+          access:
+            enabled: true
+            fields:
+              headers:
+                names:
+                  X-B3-Spanid: keep
+                  X-B3-Traceid: keep
+            format: json
+        ports:
+          websecure:
+            exposedPort: 8443
+        # publish the loadBalancer IP using publishedservice, which will update the Progressing State
+        providers:
+          kubernetesIngress:
+            publishedService:
+              enabled: true
+ #     {{- if .Values.bringmycar.disabled -}}              
+        tlsStore:
+          default:
+            defaultCertificate:
+              secretName: gca-tls
+ #      {{- end }}
+{{- if .Values.opentelemetry.enabled -}}                 
+        tracing:
+          zipkin:
+            httpEndpoint: http://opentelemetry-collector.opentelemetry:9411/api/v2/spans
+{{- end }}            
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+--- 
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-certstore-traefik
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: k3s/certificats
+    directory:
+      include: certificat-store.yaml
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+{{- end }}       
+---
+{{- if .Values.bringmycar.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-bringmycar-tls
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: k3s/certificats
+    directory:
+      include: bringmycar-tls.yaml
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+{{- end }}
+---
+{{- if .Values.supply.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-supply-tls
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "9"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: k3s/certificats
+    directory:
+      include: supply-tls.yaml
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+{{- end }}      
+---
+{{- if .Values.traefikmetrics.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-traefik-metrics
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "25"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: traefik-metrics
+    directory:
+      include: traefik-metrics.yaml
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+{{- end }}
+---
