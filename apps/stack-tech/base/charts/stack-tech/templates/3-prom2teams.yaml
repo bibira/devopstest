@@ -1,0 +1,31 @@
+{{- if .Values.kubePrometheusStack.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-prom2teams
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "30"
+    argocd.argoproj.io/hook: PreSync      
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://prometheus-msteams.github.io/prometheus-msteams/
+    targetRevision: {{ .Values.prom2teams.source.targetRevision }}
+    chart: prometheus-msteams
+    helm:
+      valuesObject: 
+        connectors: 
+          {{- with .Values.prom2teams.connectors }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: prometheus
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}      
