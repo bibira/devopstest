@@ -1,0 +1,85 @@
+{{- if .Values.redpanda.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-redpanda-crds
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "300"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://github.com/redpanda-data/redpanda-operator
+    targetRevision: {{ .Values.redpanda.crds.source.targetRevision }}
+    path: src/go/k8s/config/crd
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: redpanda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-redpanda-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "301"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://charts.redpanda.com/
+    targetRevision: {{ .Values.redpanda.operator.source.targetRevision }}
+    chart: operator
+    helm:
+      releaseName: redpanda-controller
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: redpanda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-redpanda
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "302"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: {{ .Values.srcRepoURL }}
+    targetRevision: {{ .Values.srcTargetRevision }}
+    path: apps/stack-tech/base/charts/redpanda-cluster
+    helm:
+      valuesObject:
+        {{- toYaml .Values.redpanda.cluster | nindent 8 }}
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: redpanda
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+{{- end }}
