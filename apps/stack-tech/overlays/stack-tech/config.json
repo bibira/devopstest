@@ -1,1 +1,1 @@
-{"appName":"stack-tech","userGivenName":"stack-tech","destNamespace":"default","destServer":"https://4zdeba.c1.sbg5.k8s.ovh.net","srcPath":"apps/stack-tech/overlays/stack-tech","srcRepoURL":"https://github.com/bibira/devopstest.git","srcTargetRevision":"","labels":null}
+{"appName":"stack-tech","userGivenName":"stack-tech","destNamespace":"default","destServer":"https://4zdeba.c1.sbg5.k8s.ovh.net","srcPath":"apps/stack-tech/overlays/stack-tech","srcRepoURL":"https://github.com/bibira/devopstest.git","srcTargetRevision":"main","labels":null}
