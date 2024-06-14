@@ -1,0 +1,88 @@
+{{- if .Values.keycloak.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-keycloak-secret
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "200"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://dev.azure.com/gca-trans/_git/Devops
+    targetRevision: develop
+    path: k3s/secrets
+    directory:
+      include: {{ .Values.keycloakSecret.source.directory.include }}
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: {{ .Values.spec.destination.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-keycloak
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "201"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://charts.bitnami.com/bitnami
+    targetRevision: {{ .Values.keycloak.source.targetRevision }}
+    chart: keycloak
+    helm:
+      releaseName: keycloak
+      valuesObject:
+        production: {{ .Values.keycloak.production }}
+        replicaCount: {{ .Values.keycloak.replicaCount }}
+        externalDatabase: 
+          existingSecret: {{ .Values.keycloak.externalDatabase.existingSecret }}
+          existingSecretHostKey: {{ .Values.keycloak.externalDatabase.existingSecretHostKey }} 
+          existingSecretPortKey: {{ .Values.keycloak.externalDatabase.existingSecretPortKey }}
+          existingSecretUserKey: {{ .Values.keycloak.externalDatabase.existingSecretUserKey }}
+          existingSecretDatabaseKey: {{ .Values.keycloak.externalDatabase.existingSecretDatabaseKey }}
+          existingSecretPasswordKey: {{ .Values.keycloak.externalDatabase.existingSecretPasswordKey }}
+
+        postgresql:
+          enabled: {{ .Values.keycloak.postgresql.enabled }}
+        ingress: 
+          enabled: {{ .Values.keycloak.ingress.enabled }}
+          hostname: {{ .Values.keycloak.ingress.hostName }}
+          extraHosts:
+             {{- with .Values.keycloak.ingress.extraHosts }}
+             {{- toYaml . | nindent 12 }}
+             {{- end }}
+        httpRelativePath: {{ .Values.keycloak.httpRelativePath }}
+        auth:
+          adminUser: {{ .Values.keycloak.auth.adminUser }}
+          existingSecret: {{ .Values.keycloak.auth.existingSecret }}
+          passwordSecretKey: {{ .Values.keycloak.auth.passwordSecretKey }}
+        proxy: edge
+        extraEnvVars: 
+          {{- with .Values.keycloak.extraEnvVars }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+        
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: {{ .Values.keycloak.destination.namespace }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+{{- end }}
