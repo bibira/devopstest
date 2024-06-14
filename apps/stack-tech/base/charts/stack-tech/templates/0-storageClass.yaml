@@ -1,0 +1,77 @@
+{{- if eq .Values.k8s.flavor "rke2" }}
+{{- if .Values.longhorn.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name:  {{ include "stack-tech.fullname" . }}-longhorn
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  project: {{ .Values.spec.project }}
+  sources:
+    - repoURL: https://github.com/longhorn/longhorn
+      targetRevision: {{ .Values.longhorn.source.targetRevision }} #v1.6.0
+      path: deploy/prerequisite
+      directory:
+        include: "{longhorn-iscsi-installation.yaml,longhorn-nfs-installation.yaml}"
+    - repoURL: https://charts.longhorn.io/
+      targetRevision: {{ .Values.longhorn.source.targetRevision }} #v1.6.1
+      chart: longhorn
+      helm:
+        releaseName: longhorn
+        valuesObject:
+          defaultSettings:
+            defaultDataPath: /longhorn/ 
+          preUpgradeChecker:
+            jobEnabled: false
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: longhorn-system
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}
+---
+{{- if .Values.nfsclient.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-nfsclient
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner
+    targetRevision: {{ .Values.nfsclient.source.targetRevision }}
+    chart: nfs-subdir-external-provisioner
+    helm:
+      releaseName: nfsclient
+      valuesObject:      
+        nfs:
+          path: {{ .Values.nfsclient.nfs.path }} #/mnt/logauto
+          server: {{ .Values.nfsclient.nfs.server }} #20.19.81.252
+        storageClass:
+          accessModes: {{ .Values.nfsclient.storageClass.accessModes }} #ReadWriteOnce
+          allowVolumeExpansion: true
+          archiveOnDelete: true
+          defaultClass: {{ .Values.nfsclient.storageClass.defaultClass }} #false*
+          name: nfs-client
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: nfs-provisioner
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+{{- end }}
+{{- end }}
