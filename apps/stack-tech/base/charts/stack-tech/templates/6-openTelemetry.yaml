@@ -1,0 +1,205 @@
+{{- if .Values.opentelemetry.enabled -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-otel-collector
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "60"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    targetRevision: {{ .Values.opentelemetry.source.targetRevision }}
+    chart: opentelemetry-collector
+    helm:
+      releaseName: opentelemetry-collector
+      values: |
+        config:
+          exporters:
+            debug:
+              verbosity: basic
+            loki:
+              endpoint: http://loki-gateway.loki:3100/loki/api/v1/push
+            otlp/tempo:
+              endpoint: http://tempo.tempo:4317
+              tls:
+                insecure: true
+            prometheusremotewrite:
+              endpoint: http://kube-prometheus-stack-prometheus.prometheus:9090/api/v1/write
+          processors:
+            resource:
+              attributes:
+                - action: insert
+                  key: loki.format
+                  value: raw
+            transform:
+              log_statements:
+                - context: log
+                  statements:
+                    - set(body, Concat(["ts=", time, " level=", severity_text, " caller=", instrumentation_scope.name, " msg=\"", body, "\" traceid=", trace_id.string, " spanid=", span_id.string], ""))
+          receivers:
+            jaeger:
+            otlp:
+              protocols:
+                http:
+                  cors:
+                    allowed_origins:
+                      {{- with .Values.opentelemetry.config.receivers.otlp.protocols.http.cors.allowed_origins }}
+                      {{- toYaml . | nindent 22 }}
+                      {{- end }}
+          service:
+            pipelines:
+              logs:
+                exporters: [loki]
+                processors: [k8sattributes, memory_limiter, batch, transform, resource]
+              metrics:
+                exporters: [debug, prometheusremotewrite]
+              traces:
+                receivers: [otlp, zipkin]
+                exporters: [otlp/tempo]
+        mode: deployment
+        ports:
+          metrics:
+            enabled: true
+        presets:
+          kubernetesAttributes:
+            enabled: true
+        service:
+          enabled: true
+          type: LoadBalancer
+        serviceMonitor:
+          enabled: true
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: opentelemetry
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+{{- if .Values.opentelemetry.operator.enabled -}}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-otel-operator
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    argocd.argoproj.io/sync-wave: "61"
+spec:
+  project: {{ .Values.spec.project }}
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    targetRevision: {{ .Values.otelOperator.source.targetRevision }}
+    chart: opentelemetry-operator
+    helm:
+      releaseName: opentelemetry-operator
+      valuesObject:
+        manager:
+          featureGates: operator.autoinstrumentation.go,operator.autoinstrumentation.nginx
+#          podAnnotations:
+#            argocd.argoproj.io/sync-wave: "1"
+  destination:
+    server: {{ .Values.spec.destination.server }}
+    namespace: opentelemetry
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - PruneLast=true
+    retry:
+      limit: 1
+      backoff:
+        duration: 10s
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-go
+  namespace: opentelemetry
+  annotations:
+    argocd.argoproj.io/sync-wave: "62"
+spec:
+  exporter:
+    endpoint: http://opentelemetry-collector.opentelemetry:4318
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+    - b3multi
+    - jaeger
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1"
+  go:
+    env:
+      - name: OTEL_TRACES_EXPORTER
+        value: otlp
+      - name: OTEL_METRICS_EXPORTER
+        value: otlp
+      - name: OTEL_LOGS_EXPORTER
+        value: otlp
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-java
+  namespace: opentelemetry
+  annotations:
+    argocd.argoproj.io/sync-wave: "63"
+spec:
+  exporter:
+    endpoint: http://opentelemetry-collector.opentelemetry:4317
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+    - b3multi
+    - jaeger
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1"
+  java:
+    env:
+      - name: OTEL_TRACES_EXPORTER
+        value: otlp
+      - name: OTEL_METRICS_EXPORTER
+        value: otlp
+      - name: OTEL_LOGS_EXPORTER
+        value: otlp
+---
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: {{ include "stack-tech.fullname" . }}-python
+  namespace: opentelemetry
+  annotations:
+    argocd.argoproj.io/sync-wave: "64"
+spec:
+  exporter:
+    endpoint: http://opentelemetry-collector.opentelemetry:4318
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+    - b3multi
+    - jaeger
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1"
+  java:
+    env:
+      - name: OTEL_LOGS_EXPORTER
+        value: otlp_proto_http
+      - name: OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED
+        value: 'true'
+{{- end }}
+{{- end }}
