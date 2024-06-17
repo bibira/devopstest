@@ -1,0 +1,11 @@
+{
+  "appName": "lab-test",
+  "userGivenName": "lab-test",
+  "destNamespace": "default",
+  "destServer": "https://4zdeba.c1.sbg5.k8s.ovh.net",
+  "srcPath": "apps/lab-test/overlays/stack-tech",
+  "srcRepoURL": "https://github.com/bibira/devopstest.git",
+  "srcTargetRevision": "",
+  "labels": null,
+  "annotations": null
+}
