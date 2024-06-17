@@ -1,0 +1,162 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namePrefix: devint-transverse-
+# commonLabels:
+#   variant: devint-transverse
+helmGlobals:
+  chartHome: ../../base/charts
+
+helmCharts:
+  - name: stack-tech
+    releaseName: stack-tech
+    valuesFile: config.json
+    valuesInline:
+      spec:
+        project: devint-transverse
+        destination:
+          server:  https://10.10.0.50:6443
+      #  *************
+      longhorn:
+        enabled: true
+        source:
+          targetRevision: 'v1.6.1'         
+      #  *************
+      nfsclient:
+        enabled: false
+        source:
+          targetRevision: '4.*.*'        
+        nfs:
+          path: /mnt/docker-data/devint-transverse
+          server: 10.10.1.156
+        storageClass:
+          accessModes : ReadWriteMany
+          defaultClass: false                  
+      #  *************
+      prom2teams:
+        source:
+          targetRevision: '1.*'      
+        connectors: 
+        - teams : "https://charlesandre.webhook.office.com/webhookb2/5c49e775-13d2-4f6d-80b5-ba3f1651ebaf@38e68108-2383-4d82-a4b3-ac423a5e6218/IncomingWebhook/8c89ebe05dff443391f7c465b1ed1dee/dfd76bdb-37d4-4c4c-b907-6ea781954db5"
+      #  *************
+      kubePrometheusStack:
+        enabled: true
+        source:
+          targetRevision: '58.*.*'        
+        prometheus:
+          prometheusSpec:
+            storageSpec:
+              volumeClaimTemplate:
+                spec:
+                  storageClassName: longhorn
+                  resources:
+                    requests:
+                      storage: 5Gi
+        grafana:
+          ingress:
+            enabled: true 
+            hosts: 
+              - grafana-dev-transverse.gcatrans.com                      
+      #  *************
+      loki:
+        enabled: true
+        source:
+          targetRevision: '5.43.*'
+      promtail:
+        source:
+          targetRevision: '6.*.*'
+      #  *************
+      tempo:
+        enabled: true
+        source:
+          targetRevision: '1.8.*'        
+      #  *************
+      opentelemetry:
+        enabled: true
+        source:
+          targetRevision: '0.86.*'
+      #  *************
+      certManager:
+        enabled: true
+        source:
+          targetRevision: '1.*.*'
+      #  *************
+      neuvector:
+        enabled: true
+        global:
+          cattle:
+            clusterName:  dev-int-transverse
+            clusterId: c-m-bpvt84r9         
+        controller:
+          pvc:
+            storageClass: longhorn
+        manager:
+          ingress:
+            enabled: false
+            host: rec-neuvector-lavage.gcatrans.com
+        crd:
+          source:
+            targetRevision: '2.*.*'      
+        source:
+          targetRevision: '2.*'
+      #  *************
+      bringmycar:
+        enabled: false
+      #  *************
+      supply:
+        enabled: false        
+      #  *************
+      traefik:
+        enabled: true
+        source:
+          targetRevision: '26.*' 
+      #  *************               
+      traefikmetrics:
+        enabled: true  
+      #  *************        
+      keycloak:
+        enabled: false
+        destination:
+          namespace: keycloak-ppr  
+        production: true
+        replicaCount: 2
+        postgresql:
+          enabled: false
+        externalDatabase:
+          existingSecret: # à renseigner
+          existingSecretHostKey: # à renseigner
+          existingSecretPortKey: # à renseigner
+          existingSecretUserKey: # à renseigner
+          existingSecretDatabaseKey: # à renseigner
+          existingSecretPasswordKey: # à renseigner
+        ingress:
+          enabled: true
+          hostName: # à renseigner
+          extraHosts: 
+            - name: # à renseigner          
+        httpRelativePath: /keycloak/
+        auth:
+          adminUser: admin
+          existingSecret: # à renseigner
+          passwordSecretKey: adminPassword
+        extraEnvVars:
+          - name: KC_DB_SCHEMA # override values from the conf file
+            value: 'keycloak'
+      keycloakSecret:
+        source:
+          directory:
+            include: # à renseigner 'prd-keycloak-td-*.yaml'
+      #  *************
+      redpanda:
+        enabled: true
+
+#  *************
+
+# patches:
+#   - target:
+#       kind: Application
+#       name: .*traefik 
+#     patch: |-
+#       - op: replace
+#         path: /spec/syncPolicy
+#         value: {}         
