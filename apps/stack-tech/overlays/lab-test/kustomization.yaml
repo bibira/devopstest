@@ -13,9 +13,9 @@ helmCharts:
     valuesFile: config.json
     valuesInline:
       spec:
-        project: devint-transverse
+        project: lab-test
         destination:
-          server:  https://10.10.0.50:6443
+          server:  https://51.195.139.226:6443
       #  *************
       longhorn:
         enabled: true
@@ -27,7 +27,7 @@ helmCharts:
         source:
           targetRevision: '4.*.*'        
         nfs:
-          path: /mnt/docker-data/devint-transverse
+          path: /mnt/docker-data/lab-test
           server: 10.10.1.156
         storageClass:
           accessModes : ReadWriteMany
@@ -56,7 +56,7 @@ helmCharts:
           ingress:
             enabled: true 
             hosts: 
-              - grafana-dev-transverse.gcatrans.com                      
+              - grafana-lab-test.gcatrans.com                      
       #  *************
       loki:
         enabled: true
@@ -85,7 +85,7 @@ helmCharts:
         enabled: true
         global:
           cattle:
-            clusterName:  dev-int-transverse
+            clusterName:  lab-test
             clusterId: c-m-bpvt84r9         
         controller:
           pvc:
@@ -93,7 +93,7 @@ helmCharts:
         manager:
           ingress:
             enabled: false
-            host: rec-neuvector-lavage.gcatrans.com
+            host: rec-neuvector-lab-test.com
         crd:
           source:
             targetRevision: '2.*.*'      
