@@ -4,8 +4,8 @@
   "destNamespace": "default",
   "destServer": "https://kubernetes.default.svc",
   "srcPath": "apps/stack-tech/overlays/lab-test",
-  "srcRepoURL": "https://github.com/gcatrans/horsprd-argocd.git",
-  "srcTargetRevision": "develop",
+  "srcRepoURL": "https://github.com/bibira/devopstest.git",
+  "srcTargetRevision": "main",
   "labels": null,
   "annotations": null
 }
