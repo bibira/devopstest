@@ -1,41 +1,371 @@
+# vscode-kubernetes-tools: exclude
 apiVersion: kustomize.config.k8s.io/v1beta1
-configMapGenerator:
-- behavior: merge
+secretGenerator:
+- name: argocd-notifications-secret
+  behavior: merge
   literals:
-  - |
-    repository.credentials=- passwordSecret:
-        key: git_token
-        name: autopilot-secret
-      url: https://github.com/
-      usernameSecret:
-        key: git_username
-        name: autopilot-secret
-  # https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app
-  - |
-      resource.customizations=argoproj.io/Application:
-        health.lua: |
-          hs = {}
-          hs.status = "Progressing"
-          hs.message = ""
-          if obj.status ~= nil then
-            if obj.status.health ~= nil then
-              hs.status = obj.status.health.status
-              if obj.status.health.message ~= nil then
-                hs.message = obj.status.health.message
-              end
-            end
-          end
-          return hs
-  # https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/#kustomizing-helm-charts
-  - kustomize.buildOptions=--enable-helm
-  name: argocd-cm
-  
+  - |- 
+    channel-teams-url=https://charlesandre.webhook.office.com/webhookb2/5c49e775-13d2-4f6d-80b5-ba3f1651ebaf@38e68108-2383-4d82-a4b3-ac423a5e6218/IncomingWebhook/a48ce5408e314f0395ccf706d3801a05/dfd76bdb-37d4-4c4c-b907-6ea781954db5
+# - name: repo-git
+#   behavior: create
+#   literals:
+#   - |- 
+#     password=Z2hwX21WbDE3NGdDUTZlT2dZcW5adUdycVFzek5qdWt5SDNSY0dZWQ==
+#   - |- 
+#     type=git
+#   - |- 
+#     url=https://github.com/gcatrans/argocd-lab.git
+#   - |- 
+#     username=admin   
+configMapGenerator:
+- name: argocd-rbac-cm
+  behavior: merge
+  literals:
+  - |-
+    policy.csv= g,argo-account,role:admin
+- name: argocd-notifications-cm
+  behavior: merge
+  literals:
+  - |- 
+    context=argocdUrl: https://lab-test.gcatrans.com
+  - |- 
+    subscriptions=- recipients:
+      - teams:channelName
+      triggers:
+      - on-created
+      - on-deleted
+      - on-deployed
+      - on-health-degraded
+      - on-sync-failed
+      - on-sync-running
+      - on-sync-status-unknown
+      - on-sync-succeeded
+  - |-
+    template.on-sync-status-unknown=teams:
+      summary: "Application {{.app.metadata.name}} Status unknown"     
+      title: Application {{.app.metadata.name}} sync status is 'Unknown'
+      facts: |
+        [{
+          "name": "Sync Status",
+          "value": "{{.app.status.sync.status}}"
+        },
+        {
+          "name": "Repository",
+          "value": "{{.app.spec.source.repoURL}}"
+        }
+        {{range $index, $c := .app.status.conditions}}
+          {{if not $index}},{{end}}
+          {{if $index}},{{end}}
+          {
+            "name": "{{$c.type}}",
+            "value": "{{$c.message}}"
+          }
+        {{end}}
+        ]
+      potentialAction: |
+        [{
+          "@type":"OpenUri",
+          "name":"Open Application",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}"
+          }]
+        },
+        {
+          "@type":"OpenUri",
+          "name":"Open Repository",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.app.spec.source.repoURL | call .repo.RepoURLToHTTPS}}"
+          }]
+        }]          
+  - |-
+    template.on-health-degraded=teams:
+      summary: "Application {{.app.metadata.name}} health degraded"     
+      themeColor: "#FF0000"
+      title: Application {{.app.metadata.name}} has degraded.
+      facts: |
+        [{
+          "name": "Health Status",
+          "value": "{{.app.status.health.status}}"
+        },
+        {
+          "name": "Repository",
+          "value": "{{.app.spec.source.repoURL}}"
+        }
+        {{range $index, $c := .app.status.conditions}}
+          {{if not $index}},{{end}}
+          {{if $index}},{{end}}
+          {
+            "name": "{{$c.type}}",
+            "value": "{{$c.message}}"
+          }
+        {{end}}
+        ]
+      potentialAction: |
+        [{
+          "@type":"OpenUri",
+          "name":"Open Application",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}"
+          }]
+        },
+        {
+          "@type":"OpenUri",
+          "name":"Open Repository",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.app.spec.source.repoURL | call .repo.RepoURLToHTTPS}}"
+          }]
+        }]
+
+  - |-
+    template.on-sync-failed=teams:
+      summary: "Application {{.app.metadata.name}} Sync failed"     
+      themeColor: "#FF0000"
+      title: Failed to sync application {{.app.metadata.name}}.
+      facts: |
+        [{
+          "name": "Sync Status",
+          "value": "{{.app.status.sync.status}}"
+        },
+        {
+          "name": "Failed at",
+          "value": "{{.app.status.operationState.finishedAt}}"
+        },
+        {
+          "name": "Repository",
+          "value": "{{.app.spec.source.repoURL}}"
+        }
+        {{range $index, $c := .app.status.conditions}}
+          {{if not $index}},{{end}}
+          {{if $index}},{{end}}
+         {
+            "name": "{{$c.type}}",
+            "value": "{{$c.message}}"
+          }
+        {{end}}
+        ]
+      potentialAction: |
+        [{
+          "@type":"OpenUri",
+          "name":"Open Operation",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true"
+          }]
+        },
+        {
+          "@type":"OpenUri",
+          "name":"Open Repository",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.app.spec.source.repoURL | call .repo.RepoURLToHTTPS}}"
+          }]
+        }]
+  - |-
+    template.on-sync-succeeded=teams:
+      summary: "Application {{.app.metadata.name}} Sync Succeeded"  
+      facts: |
+        [{
+          "name": "Sync Status",
+          "value": "{{.app.status.sync.status}}"
+        },
+        {
+          "name": "Synced at",
+          "value": "{{.app.status.operationState.finishedAt}}"
+        },
+        {
+          "name": "Repository",
+          "value": "{{.app.spec.source.repoURL}}"
+        }
+        {{range $index, $c := .app.status.conditions}}
+          {{if not $index}},{{end}}
+          {{if $index}},{{end}}
+          {
+            "name": "{{$c.type}}",
+            "value": "{{$c.message}}"
+          }
+        {{end}}
+        ]
+      potentialAction: |-
+        [{
+          "@type":"OpenUri",
+          "name":"Operation Details",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true"
+          }]
+        },
+        {
+          "@type":"OpenUri",
+          "name":"Open Repository",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.app.spec.source.repoURL | call .repo.RepoURLToHTTPS}}"
+          }]
+        }]
+      themeColor: '#000080'
+      title: Application {{.app.metadata.name}} has been successfully synced
+  - |-
+    template.on-created=teams:
+      summary: "Application {{.app.metadata.name}} created"     
+      message: &message Application {{.app.metadata.name}} has been created.
+      title: *message   
+  - |-
+    template.on-deployed=teams:
+      summary: "Application {{.app.metadata.name}} deployed" 
+      themeColor: "#000080"
+      title: New version of an application {{.app.metadata.name}} is up and running.
+      facts: |
+        [{
+          "name": "Sync Status",
+          "value": "{{.app.status.sync.status}}"
+        },
+        {
+          "name": "Repository",
+          "value": "{{.app.spec.source.repoURL}}"
+        },
+        {
+          "name": "Revision",
+          "value": "{{.app.status.sync.revision}}"
+        }
+        {{range $index, $c := .app.status.conditions}}
+          {{if not $index}},{{end}}
+          {{if $index}},{{end}}
+          {
+            "name": "{{$c.type}}",
+            "value": "{{$c.message}}"
+          }
+        {{end}}
+        ]
+      potentialAction: |
+        [{
+          "@type":"OpenUri",
+          "name":"Operation Application",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.context.argocdUrl}}/applications/{{.app.metadata.name}}"
+          }]
+        },
+        {
+          "@type":"OpenUri",
+          "name":"Open Repository",
+          "targets":[{
+            "os":"default",
+            "uri":"{{.app.spec.source.repoURL | call .repo.RepoURLToHTTPS}}"
+          }]
+        }]             
+  - |-
+    template.on-deleted=teams:
+      summary: "Application {{.app.metadata.name}} deleted"     
+      title: Application {{.app.metadata.name}} has been deleted.
+  - |-
+    trigger.on-deployed=- when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+      description: Application is synced and healthy. Triggered once per commit.
+      send: [on-deployed]
+      oncePer: app.status.operationState.syncResult.revision          
+  - |-
+    trigger.on-sync-status-unknown=- when: app.status.sync.status == 'Unknown'
+      description: Application status is 'Unknown'
+      send: [on-sync-status-unknown]
+  - |-
+    trigger.on-health-degraded=- when: app.status.health.status == 'Degraded'
+      description: Application has degraded
+      send: [on-health-degraded]
+  - |-
+    trigger.on-sync-succeeded=- when: app.status.operationState.phase in ['Succeeded']
+      send: [on-sync-succeeded]
+  - |-
+    trigger.on-sync-failed=- when: app.status.operationState.phase in ['Error', 'Failed']
+      description: Application syncing has failed
+      send: [on-sync-failed]
+  - |-
+    trigger.on-deleted=- when: app.metadata.deletionTimestamp != nil
+      send: [on-deleted]
+  - |-
+    trigger.on-sync-running=- when: app.status.operationState.phase in ['running']
+      description: Application is being synced
+      send: [on-sync-running]
+  - |-
+    trigger.on-created=- when: true
+      description: Application is created.
+      send: [on-created]
+      oncePer: app.metadata.name
+  - |-
+    service.teams=recipientUrls: 
+      channelName: $channel-teams-url
+   
+#   # - |
+#   #   defaultTriggers=- on-created
+#   #     - on-deleted
+#   #     - on-sync-failed 
+
+# - behavior: merge
+#   literals:
+#   - |
+#     accounts.argo-account=apiKey,login
+#   - |
+#     repository.credentials=- passwordSecret:
+#         key: git_token
+#         name: autopilot-secret
+#       url: https://github.com/
+#       usernameSecret:
+#         key: git_username
+#         name: autopilot-secret
+#   # https://argo-cd.readthedocs.io/en/stable/operator-manual/health/#argocd-app
+#   - |
+#       resource.customizations=argoproj.io/Application:
+#         health.lua: |
+#           hs = {}
+#           hs.status = "Progressing"
+#           hs.message = ""
+#           if obj.status ~= nil then
+#             if obj.status.health ~= nil then
+#               hs.status = obj.status.health.status
+#               if obj.status.health.message ~= nil then
+#                 hs.message = obj.status.health.message
+#               end
+#             end
+#           end
+#           return hs
+#   # https://argo-cd.readthedocs.io/en/stable/user-guide/kustomize/#kustomizing-helm-charts
+#   - kustomize.buildOptions=--enable-helm --load-restrictor=LoadRestrictionsNone
+#   name: argocd-cm
+
 - name: argocd-cmd-params-cm
   behavior: merge
   literals:
   # https://argo-cd.readthedocs.io/en/stable/operator-manual/ingress/#traefik-v22
   - server.insecure="true"
+  - anotificationscontroller.selfservice.enabled="true"
 kind: Kustomization
 namespace: argocd
 resources:
-- github.com/argoproj-labs/argocd-autopilot/manifests/base?ref=v0.2.28
+- github.com/argoproj-labs/argocd-autopilot/manifests/ha #?ref=v0.4.17
+- ./ingress.yaml
+- ./secret-repo-devops.yaml
+# - ./argocd-cm.yaml
+# - ./argocd-secret.yaml
+# patches: 
+# - target:
+#     Version: v1
+#     kind: ConfigMap
+#     name: argocd-notifications-cm
+#   path: ./argocd-notifications-cm.yaml
+patches:
+  - path: ./secret-repo-devops.yaml
+  - path: ./argocd-cm.yaml
+  - path: ./argocd-secret.yaml
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: argocd-application-controller
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/resources
+        value:
+          limits:
+            cpu: 2000m            
